@@ -25,7 +25,7 @@ dry_run = false
 
 [profiles]
 # Exact names of your ControlD profiles (case-sensitive).
-names = ["Tesla", "Kids", "Friends", "Adults"]
+names = ["Daily Driver"]
 
 # =============================================================================
 # FOLDER DEFINITIONS
@@ -35,11 +35,8 @@ names = ["Tesla", "Kids", "Friends", "Adults"]
 # =============================================================================
 
 [folders]
-"Badware Hoster"         = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/controld/badware-hoster-folder.json"
-"Most Abused TLDs"       = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/controld/spam-tlds-combined-folder.json"
-"No Safesearch Support"  = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/controld/nosafesearch-folder.json"
-"Referral Allow" = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/controld/referral-allow-folder.json"
-"META Tracker Allow"     = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/controld/meta-tracker-allow-folder.json"
+"LowTechHost"  = "https://filter.futa.gg/hosts_ctld.json"
+"TW165"        = "https://filter.futa.gg/TW165_ctld.json"
 
 # =============================================================================
 # PROFILE → FOLDER MAPPINGS
@@ -49,22 +46,4 @@ names = ["Tesla", "Kids", "Friends", "Adults"]
 # =============================================================================
 
 [profile_folders]
-Tesla   = ["Badware Hoster", "Most Abused TLDs"]
-Kids    = [
-  "Badware Hoster",
-  "Most Abused TLDs",
-  "No Safesearch Support",
-  "Referral Allow"
-]
-Friends = [
-  "Badware Hoster",
-  "Most Abused TLDs",
-  "Referral Allow",
-  "META Tracker Allow"
-]
-Adults  = [
-  "Badware Hoster",
-  "Most Abused TLDs",
-  "Referral Allow",
-  "META Tracker Allow"
-]
+"Daily Driver" = ["LowTechHost", "TW165"]
