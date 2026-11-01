@@ -111,3 +111,18 @@ jobs:
           [[ -n "$PROFILE" ]] && args+=(--profile "$PROFILE")
           [[ "$NO_CACHE" == "true" ]] && args+=(--no-cache)
           bash sync-hagezi.sh "${args[@]}"
+
+  # Public repos disable scheduled workflows after 60 days without activity.
+  # Re-enabling through the API is what keepalive actions do instead of empty commits.
+  keepalive:
+    # Only scheduled runs need to keep the schedule alive
+    if: ${{ github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PUT "repos/${{ github.repository }}/actions/workflows/sync.yml/enable"
+          gh api -X PUT "repos/${{ github.repository }}/actions/workflows/cleanup.yml/enable"
