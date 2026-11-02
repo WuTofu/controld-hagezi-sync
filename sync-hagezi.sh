@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # =============================================================================
 # ControlD HaGeZi Folder Auto-Sync
-# Version: 2.3.1
-# Description: Syncs HaGeZi DNS blocklist folders using atomic server-side swaps.
+# Version: 2.3.2
+# Description: Syncs HaGeZi DNS blocklist folders by deleting and re-importing changed folders.
 # Requirements: bash 4.3+, curl, jq, cmp
 # =============================================================================
 
 set -o pipefail
 shopt -s extglob
 
-VERSION="2.3.1"
+VERSION="2.3.2"
 
 # Bash version check
 if (( BASH_VERSINFO[0] < 4 )); then
@@ -784,34 +784,6 @@ print_freshness_report() {
 }
 
 # ---------------------------------------------------------------------------
-# ROLLBACK HELPER
-# ---------------------------------------------------------------------------
-
-rollback_group() {
-    local pid="$1" existing_pk="$2" name="$3" new_pk="$4" old_name="$5"
-
-    if [[ -n "$new_pk" && "$new_pk" != "null" ]]; then
-        log "  Deleting partially-imported group..."
-        if ! delete_group_by_pk "$pid" "$new_pk" 2>/dev/null; then
-            log "  WARN: Failed to delete partially-imported group $new_pk"
-        fi
-    fi
-
-    if [[ -n "$existing_pk" && "$existing_pk" != "null" ]]; then
-        local rollback_payload
-        rollback_payload=$(jq -n --arg n "$name" '{"name": $n}')
-        if api_call_with_retry "PUT" "${API_BASE}/profiles/${pid}/groups/${existing_pk}" "$rollback_payload" >/dev/null; then
-            log "  Rollback complete. Restored original group."
-            return 0
-        else
-            log "  CRITICAL ERROR: Rollback failed. Group is stuck as '$old_name'."
-            return 1
-        fi
-    fi
-    return 0
-}
-
-# ---------------------------------------------------------------------------
 # IMPORT WITH VALIDATION LOOP
 # ---------------------------------------------------------------------------
 
@@ -909,7 +881,7 @@ import_with_validation() {
 }
 
 # ---------------------------------------------------------------------------
-# SERVER-SIDE ATOMIC SYNC LOGIC
+# FOLDER SYNC LOGIC
 # ---------------------------------------------------------------------------
 
 sync_folder() {
@@ -955,44 +927,34 @@ sync_folder() {
         delete_group_by_pk "$pid" "$stale_old_pk" 2>/dev/null || true
     fi
 
-    # Step 1: Rename existing to _OLD
-    if [[ -n "$existing_pk" && "$existing_pk" != "null" ]]; then
-        log "  Renaming existing group to '$old_name'..."
-        if [[ "$DRY_RUN" == false ]]; then
-            local rename_payload
-            rename_payload=$(jq -n --arg n "$old_name" '{"name": $n}')
-            if ! api_call_with_retry "PUT" "${API_BASE}/profiles/${pid}/groups/${existing_pk}" "$rename_payload" >/dev/null; then
-                log "  ERROR: Failed to rename existing group. Aborting."
-                summary_row "$pname" "$fname" "❌ Rename Failed" "-"
-                return 1
-            fi
-        fi
-    fi
-
-    # Step 2: Dry run
     if [[ "$DRY_RUN" == true ]]; then
-        log "  [DRY-RUN] Would import '$name' ($total_rules rules) and delete '$old_name'"
+        [[ -n "$existing_pk" && "$existing_pk" != "null" ]] && log "  [DRY-RUN] Would delete existing '$name' (PK: $existing_pk)"
+        log "  [DRY-RUN] Would import '$name' ($total_rules rules)"
         summary_row "$pname" "$fname" "✅ Success (Dry Run)" "$total_rules"
         return 0
     fi
 
-    # Step 3: Import with validation loop
+    # Step 1: Delete the existing folder. Importing next to it counts both
+    # copies against the 10,000 custom-rule limit, so a list over ~half the
+    # limit could never be re-imported while the old folder still exists.
+    if [[ -n "$existing_pk" && "$existing_pk" != "null" ]]; then
+        log "  Deleting existing group '$name' (PK: $existing_pk)..."
+        if ! delete_group_by_pk "$pid" "$existing_pk"; then
+            log "  ERROR: Failed to delete existing group. Aborting."
+            summary_row "$pname" "$fname" "❌ Delete Failed" "-"
+            return 1
+        fi
+    fi
+
+    # Step 2: Import with validation loop. There is no rollback: on failure
+    # the folder stays missing (or partial) and the next run re-imports it.
     new_pk=$(import_with_validation "$pid" "$name" "$cachefile" "$fname")
     if [[ -z "$new_pk" || "$new_pk" == "null" ]]; then
-        log "  ERROR: Import/validation failed. Attempting rollback..."
-        if rollback_group "$pid" "$existing_pk" "$name" "$new_pk" "$old_name"; then
-            summary_row "$pname" "$fname" "❌ Validation failed (rolled back)" "-"
-        else
-            summary_row "$pname" "$fname" "❌ CRITICAL: Rollback failed" "-"
-        fi
+        log "  ERROR: Import/validation failed; folder will be re-imported next run"
+        summary_row "$pname" "$fname" "❌ Import failed" "-"
         return 1
     fi
 
-    # Step 4: Success — clean up old group
-    if [[ -n "$existing_pk" && "$existing_pk" != "null" ]]; then
-        log "  Cleaning up old group..."
-        delete_group_by_pk "$pid" "$existing_pk"
-    fi
     summary_row "$pname" "$fname" "✅ Success" "$total_rules"
     return 0
 }
