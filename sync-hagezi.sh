@@ -1157,6 +1157,12 @@ main() {
             continue
         }
 
+        # Hostnames already claimed by an earlier folder of this profile.
+        # ControlD allows a hostname once per profile, and importing it again
+        # moves it out of the other folder, so the two would trade it forever.
+        local seen_file="$WORK_DIR/seen_$(safe_name "$pname")"
+        : > "$seen_file"
+
         local IFS=$'\x1F'
         read -ra TO_SYNC <<< "$folder_list"
         for f in "${TO_SYNC[@]}"; do
@@ -1169,6 +1175,16 @@ main() {
                 FAILED_COUNT=$(( FAILED_COUNT + 1 ))
                 continue
             fi
+
+            # First folder in config order keeps a shared hostname
+            local deduped="$WORK_DIR/cache/$(safe_name "$pname")__$(safe_name "$f").json" dropped
+            jq --rawfile seen "$seen_file" '
+                ($seen | split("\n") | map({key: ., value: true}) | from_entries) as $s
+                | .rules |= map(select($s[.PK] == null))' "$cachefile" > "$deduped"
+            dropped=$(( $(jq '.rules | length' "$cachefile") - $(jq '.rules | length' "$deduped") ))
+            (( dropped > 0 )) && log "  Folder: $f — dropping $dropped hostname(s) already in an earlier folder"
+            jq -r '.rules[].PK' "$deduped" >> "$seen_file"
+            cachefile="$deduped"
 
             if [[ "${FOLDER_CHANGED[$f]}" == "false" ]]; then
                 # Cache says unchanged, but validate ControlD still has the rules.

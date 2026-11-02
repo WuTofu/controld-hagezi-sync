@@ -48,6 +48,7 @@ Automatically sync HaGeZi DNS blocklists to your ControlD profiles via the Contr
 - **Delete-then-import** — a changed folder is deleted and re-imported in one shot. Importing next to the old copy would count both against ControlD's 10,000 custom-rule limit, so lists over ~5,000 rules could never update. The folder is briefly missing during the import
 - **Post-import validation** — polls ControlD until rule count matches the source. Retries once on mismatch; if it still fails, the next run re-imports the folder
 - **Self-healing on every run** — even "unchanged" folders are validated against ControlD. If a previous import silently failed or a group was manually deleted, it is force-synced automatically
+- **Cross-folder dedupe** — ControlD allows a hostname only once per profile. When two folders mapped to the same profile share a hostname, the folder listed first in `[profile_folders]` keeps it and later folders skip it, so imports don't keep moving it back and forth
 - **Legacy cleanup** — removes leftover `_OLD` groups created by the rename/swap flow of v2.3.1 and earlier
 - **Large list support** — file-based upload bypasses `ARG_MAX` for blocklists with hundreds of thousands of rules
 - **Automated cleanup** — scheduled workflow-run cleanup keeps your Actions history tidy (retains the latest run, deletes old logs/runs after 30 days or 100 runs)
